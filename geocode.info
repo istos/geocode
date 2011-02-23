@@ -1,0 +1,4 @@
+; $Id$
+name = Geocode
+description = Geocode
+core = 7.x

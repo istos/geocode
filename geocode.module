@@ -1,0 +1,88 @@
+<?php
+
+/**
+ * The Geocode API call.
+ */
+function geocode($handler, $input, $return = 'point', $options = array()) {
+  static $handlers = array();
+
+  if (!isset($handlers[$handler])) {
+    $info = geocode_handler_info();
+    if ($h = $info[$handler]) {
+      // Load the geocoder's file.
+      $path = (isset($h['file path'])) ? $h['file path'] .'/' : '';
+      require_once $path . $h['file'];
+
+      // Instantiate a class for it.
+      $handlers[$handler] = New $handler($options);
+    }
+  }
+
+  if (!$handler = $handlers[$handler]) return FALSE;
+
+  if ($handler->geocode($input, $options)) {
+    return $handler;
+  }
+}
+
+/**
+ * Return a list of all handlers that might geocode something for you. 
+ */
+function geocode_handler_info($field_type = NULL) {
+  static $handlers;
+  if (!$handlers) {
+    module_load_include('inc', 'geocode', 'includes/geocode');
+    $handlers = module_invoke_all('geocode_handler_info');
+    drupal_alter('geocode_handlers', $handlers);
+  }
+  if ($field_type) {
+    $field_handlers = $handlers;
+    foreach($field_handlers as $i => $handler) {
+      if (!in_array($field_type, $handler['field types'])) {
+        unset($field_handlers[$i]);
+      }
+    }
+    return $field_handlers;
+  }
+  return $handlers;
+}
+
+/**
+ * Implementation of our own hook_geocode_handler_info().
+ */
+function geocode_geocode_handler_info() {
+  $handlers = array();
+
+  // A default geocoding handler.
+  $handlers['geocode_google'] = array(
+    'title' => t('Google API'),
+    'callback' => 'geocode_handler_google',
+    'module' => 'geocode',
+    'file' => 'geocode.inc',
+    'file path' => drupal_get_path('module', 'geocode') .'/includes',
+    'field types' => array('postal', 'textfield'),
+    'return types' => array(
+      'geo' => array('point'),
+      'postal' => array('postal'),
+      'text' => array('country', 'city', 'state', 'zip'),
+    ),
+  );
+
+  // Based on availablilty, include handlers that leverage installed modules.
+  // This is for some out-of-the-box interoperability, but should be supplanted
+  // by modules implementing hook_geocode_hander_info() on their own.
+  $dir = drupal_get_path('module', 'geocode') . '/includes/modules/';
+  foreach (file_scan_directory($dir, '/\.inc$/') as $file) {
+    if (module_exists($module = $file->name)) {
+      $func = $module . '_geocode_handler_info';
+
+      // Call hook_geocode_handler_info() if the module doesn't account for it.
+      if (!function_exists($func) && !function_exists($func .'_alter')) {
+        require $dir . $module .'.inc';
+        $handlers = array_merge($handlers, $func());
+      }
+    }
+  }
+
+  return $handlers;
+}
