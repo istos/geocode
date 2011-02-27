@@ -86,3 +86,112 @@ function geocode_geocode_handler_info() {
 
   return $handlers;
 }
+
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function geocode_field_widget_info() {
+  return array(
+    'geocode' => array(
+      'label' => t('Geocode from another field'),
+      'field types' => array('geofield'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function geocode_field_widget_form(&$form, &$form_state, $field, $instance,
+  $langcode, $items, $delta, $base) {
+  $element = $base;
+  
+  $element['wkt'] = array(
+   '#type' => 'hidden',
+   '#element_validate' => array('geocode_widget_validate'),
+  );
+  $element['geocode_target'] = array(
+   '#type' => 'hidden',
+   '#value' => $instance['field_name'],
+  );
+  $element['geocode_source'] = array(
+   '#type' => 'hidden',
+   '#value' => $instance['widget']['settings']['geocode_field'],
+  );
+  
+  return $element;
+}
+
+function geocode_widget_validate($element, &$form_state) {
+  // To validate, we simply run through the form fields, looking for items with geocode_source and geocode_target properties
+  $lang = $form_state['values']['language'];
+  
+  // Walk the form_state values, applying all instances of gocode source and target operations
+  foreach ($form_state['values'] as &$field) {
+    if (is_array($field)) {
+      if (!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target'])) {
+        // We found a source / target pair, let's do this.
+        $source = $field[$lang][0]['geocode_source'];
+        
+        $field[$lang] = array();
+        foreach ($form_state['values'][$source][$lang] as $delta => $item) {
+          $geocode_value = geocode('geocode_google',$item['value']);
+          if ($geocode_value) {
+            $lat = $geocode_value->point['lat'];
+            $lon = $geocode_value->point['lon'];
+            
+            $field[$lang][$delta] = array(
+              'wkt' => "POINT(".$lon." ".$lat.")",
+              'type' => "point",
+              'lat' => $lat,
+              'lon' => $lon,
+              'top' => $lat,
+              'bottom' => $lat,
+              'left' => $lon,
+              'right' => $lon,
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements field_widget_settings_form().
+ */
+function geocode_field_widget_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+  
+  $entity_fields = field_info_instances($instance['entity_type'], $instance['bundle']);
+  $all_fields = field_info_fields();
+  $supported_field_types = array(
+    'text',
+    'text_long',
+  );
+  $valid_fields = array();
+  
+  // We only are supporting text fields at-the-moment
+  // TODO: Support images and files
+  
+  // Get a list of all valid fields that we both support and are part of this entity
+  foreach ($all_fields as $field) {
+    if (array_key_exists($field['field_name'], $entity_fields)) {
+      if (in_array($field['type'], $supported_field_types)) {
+        $valid_fields[$field['field_name']] = $entity_fields[$field['field_name']]['label'];
+      }
+    }
+  }
+  
+  $form['geocode_field'] = array(
+    '#type' => 'select',
+    '#title' => t('Geocode from field'),
+    '#default_value' => isset($settings['geocode_field']) ? $settings['geocode_field']: '',
+    '#options' => $valid_fields,
+    '#description' => t('Select which field you would like to geocode from. Currently we only support addresses via a text-field. This will change!'),
+    '#required' => TRUE,
+  );
+
+  return $form;
+}
