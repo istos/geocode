@@ -125,11 +125,11 @@ function geocode_field_widget_form(&$form, &$form_state, $field, $instance,
 
 function geocode_widget_validate($element, &$form_state) {
   // To validate, we simply run through the form fields, looking for items with geocode_source and geocode_target properties
-  $lang = $form_state['values']['language'];
   
   // Walk the form_state values, applying all instances of gocode source and target operations
   foreach ($form_state['values'] as &$field) {
     if (is_array($field)) {
+      $lang = $field[$form_state['values']['language']] ? $form_state['values']['language'] : 'und';
       if (!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target'])) {
         // We found a source / target pair, let's do this.
         $source = $field[$lang][0]['geocode_source'];
