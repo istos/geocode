@@ -2,43 +2,35 @@
 
 /**
  * The Geocode API call.
+ * @example:
+ *    geocode('google','4925 Gair Ave, Terrace, BC');
+ *    geocode('google','New York City','polygon');
  */
-function geocode($handler, $input, $return = 'point', $options = array()) {
-  static $handlers = array();
-
-  if (!isset($handlers[$handler])) {
-    $info = geocode_handler_info();
-    if ($h = $info[$handler]) {
-      // Load the geocoder's file.
-      $path = (isset($h['file path'])) ? $h['file path'] .'/' : '';
-      require_once $path . $h['file'];
-
-      // Instantiate a class for it.
-      $handlers[$handler] = New $handler($options);
-    }
-  }
-
-  if (!$handler = $handlers[$handler]) return FALSE;
-
-  if ($handler->geocode($input, $options)) {
-    return $handler;
-  }
+function geocode() {
+	ctools_include('plugins');
+	
+  $args = func_get_args();
+  $processor_name = array_shift($args);
+  $processor = ctools_get_plugins('geocode', 'geocode_handler', $processor_name);
+  $geometry = call_user_func_array($processor['callback'],$args);
+  
+  return $geometry;
 }
 
 /**
  * Return a list of all handlers that might geocode something for you. 
  */
 function geocode_handler_info($field_type = NULL) {
+	ctools_include('plugins');
+	
   static $handlers;
   if (!$handlers) {
-    module_load_include('inc', 'geocode', 'includes/geocode');
-    $handlers = module_invoke_all('geocode_handler_info');
-    drupal_alter('geocode_handlers', $handlers);
+    $handlers = ctools_get_plugins('geocode', 'geocode_handler');
   }
   if ($field_type) {
     $field_handlers = $handlers;
     foreach($field_handlers as $i => $handler) {
-      if (!in_array($field_type, $handler['field types'])) {
+      if (!isset($handler['field_types']) || !in_array($field_type, $handler['field_types'])) {
         unset($field_handlers[$i]);
       }
     }
@@ -47,46 +39,67 @@ function geocode_handler_info($field_type = NULL) {
   return $handlers;
 }
 
-/**
- * Implementation of our own hook_geocode_handler_info().
- */
-function geocode_geocode_handler_info() {
-  $handlers = array();
+function geocode_get_handler($handler_name) {
+	$handlers = geocode_handler_info();
+	return $handlers[$handler_name];
+}
 
-  // A default geocoding handler.
-  $handlers['geocode_google'] = array(
-    'title' => t('Google API'),
-    'callback' => 'geocode_handler_google',
-    'module' => 'geocode',
-    'file' => 'geocode.inc',
-    'file path' => drupal_get_path('module', 'geocode') .'/includes',
-    'field types' => array('postal', 'textfield'),
-    'return types' => array(
-      'geo' => array('point'),
-      'postal' => array('postal'),
-      'text' => array('country', 'city', 'state', 'zip'),
-    ),
-  );
+function geocode_supported_field_types() {
+	$supported = array();
+	
+	$processors = geocode_handler_info();
 
-  // Based on availablilty, include handlers that leverage installed modules.
-  // This is for some out-of-the-box interoperability, but should be supplanted
-  // by modules implementing hook_geocode_hander_info() on their own.
-  $dir = drupal_get_path('module', 'geocode') . '/includes/modules/';
-  foreach (file_scan_directory($dir, '/\.inc$/') as $file) {
-    if (module_exists($module = $file->name)) {
-      $func = $module . '_geocode_handler_info';
+	foreach ($processors as $processor) {
+		if (isset($processor['field_types'])) {
+			foreach ($processor['field_types'] as $field_type) {
+				$supported[$field_type][] = $processor['name'];
+			}
+	  }
+	}
+	
+	return $supported;
+}
 
-      // Call hook_geocode_handler_info() if the module doesn't account for it.
-      if (!function_exists($func) && !function_exists($func .'_alter')) {
-        require $dir . $module .'.inc';
-        $handlers = array_merge($handlers, $func());
+function geocode_load_geophp() {
+  static $static_cache = FALSE;
+  
+  if (!$static_cache) {
+    $path = libraries_get_path('geoPHP');
+    $file = $path.'/geoPHP.inc';
+    if (file_exists($file)) {
+      if (include_once($file)) {
+        $static_cache = $file;
       }
     }
   }
-
-  return $handlers;
+  
+  return $static_cache;
 }
 
+
+/**
+ * Implementation of hook_ctools_plugin_api().
+ */
+function geocode_ctools_plugin_api() {
+  return array('version' => 1);
+}
+
+/**
+ * Implementation of hook_ctools_plugin_dierctory() to let the system know
+ * we implement plugins.
+ */
+function geocode_ctools_plugin_directory($module, $plugin) {
+  return 'plugins/' . $plugin;
+}
+
+/**
+ * Implements hook_ctools_plugin_type
+ */
+function geocode_ctools_plugin_type() {
+  return array(
+    'geocode_handler' => array(),
+  );
+}
 
 /**
  * Implements hook_field_widget_info().
@@ -98,6 +111,53 @@ function geocode_field_widget_info() {
       'field types' => array('geofield'),
     ),
   );
+}
+
+
+/**
+ * Implements field_widget_settings_form().
+ */
+function geocode_field_widget_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+  
+  $entity_fields = field_info_instances($instance['entity_type'], $instance['bundle']);
+  $all_fields = field_info_fields();
+  $supported_field_types = geocode_supported_field_types();
+  $processors = geocode_handler_info();
+  $valid_fields = array();
+  $available_handlers = array();
+  
+  // Get a list of all valid fields that we both support and are part of this entity
+  foreach ($all_fields as $field) {
+    if (array_key_exists($field['field_name'], $entity_fields)) {
+      if (in_array($field['type'], array_keys($supported_field_types))) {
+        $valid_fields[$field['field_name']] = $entity_fields[$field['field_name']]['label'];
+        foreach ($supported_field_types[$field['type']] as $handler) {
+          $available_handers[$handler] = $processors[$handler]['title'];
+        }
+      }
+    }
+  }
+  
+  $form['geocode_field'] = array(
+    '#type' => 'select',
+    '#title' => t('Geocode from field'),
+    '#default_value' => isset($settings['geocode_field']) ? $settings['geocode_field']: '',
+    '#options' => $valid_fields,
+    '#description' => t('Select which field you would like to geocode from.'),
+    '#required' => TRUE,
+  );
+
+  $form['geocode_handler'] = array(
+    '#type' => 'select',
+    '#title' => t('Geocoder'),
+    '#default_value' => isset($settings['geocode_handler']) ? $settings['geocode_handler']: '',
+    '#options' => $available_handers,
+    '#description' => t('Select which type of geocoding handler you would like to use'),
+    '#required' => TRUE,
+  );
+
+  return $form;
 }
 
 /**
@@ -117,81 +177,45 @@ function geocode_field_widget_form(&$form, &$form_state, $field, $instance,
   );
   $element['geocode_source'] = array(
    '#type' => 'hidden',
-   '#value' => $instance['widget']['settings']['geocode_field'],
+   '#value' => isset($instance['widget']['settings']['geocode_field']) ? $instance['widget']['settings']['geocode_field'] : '',
   );
-  
+  $element['geocode_handler'] = array(
+   '#type' => 'hidden',
+   '#value' => isset($instance['widget']['settings']['geocode_handler']) ? $instance['widget']['settings']['geocode_handler'] : '',
+  );
+
   return $element;
 }
 
 function geocode_widget_validate($element, &$form_state) {
   // To validate, we simply run through the form fields, looking for items with geocode_source and geocode_target properties
   
-  // Walk the form_state values, applying all instances of gocode source and target operations
+  // Walk the form_state values, applying all instances of geocode source and target operations
   foreach ($form_state['values'] as &$field) {
     if (is_array($field)) {
-      $lang = $field[$form_state['values']['language']] ? $form_state['values']['language'] : 'und';
-      if (!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target'])) {
-        // We found a source / target pair, let's do this.
+      $lang = isset($field[$form_state['values']['language']]) ? $form_state['values']['language'] : 'und';
+      if ((!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target']) && !empty($field[$lang][0]['geocode_handler']))) {
+        // We found a source/target/handler set, let's do this.
         $source = $field[$lang][0]['geocode_source'];
-        
+        $handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
+        $field_object = field_info_field($field[$lang][0]['geocode_source']);
         $field[$lang] = array();
         foreach ($form_state['values'][$source][$lang] as $delta => $item) {
-          $geocode_value = geocode('geocode_google',$item['value']);
-          if ($geocode_value) {
-            $lat = $geocode_value->point['lat'];
-            $lon = $geocode_value->point['lon'];
-            
+        	$geometry = call_user_func($handler['field_callback'],$field_object, $item);
+          if ($geometry) {
             $field[$lang][$delta] = array(
-              'wkt' => "POINT(".$lon." ".$lat.")",
-              'type' => "point",
-              'lat' => $lat,
-              'lon' => $lon,
-              'top' => $lat,
-              'bottom' => $lat,
-              'left' => $lon,
-              'right' => $lon,
+              'wkt' => $geometry->out('wkt'),
+              'geo_type' => "point",
+              'lat' => $geometry->getY(),
+              'lon' => $geometry->getX(),
+              'top' => $geometry->getY(),
+              'bottom' => $geometry->getY(),
+              'left' => $geometry->getX(),
+              'right' => $geometry->getX(),
             );
           }
         }
       }
     }
   }
-}
-
-/**
- * Implements field_widget_settings_form().
- */
-function geocode_field_widget_settings_form($field, $instance) {
-  $settings = $instance['settings'];
-  
-  $entity_fields = field_info_instances($instance['entity_type'], $instance['bundle']);
-  $all_fields = field_info_fields();
-  $supported_field_types = array(
-    'text',
-    'text_long',
-  );
-  $valid_fields = array();
-  
-  // We only are supporting text fields at-the-moment
-  // TODO: Support images and files
-  
-  // Get a list of all valid fields that we both support and are part of this entity
-  foreach ($all_fields as $field) {
-    if (array_key_exists($field['field_name'], $entity_fields)) {
-      if (in_array($field['type'], $supported_field_types)) {
-        $valid_fields[$field['field_name']] = $entity_fields[$field['field_name']]['label'];
-      }
-    }
-  }
-  
-  $form['geocode_field'] = array(
-    '#type' => 'select',
-    '#title' => t('Geocode from field'),
-    '#default_value' => isset($settings['geocode_field']) ? $settings['geocode_field']: '',
-    '#options' => $valid_fields,
-    '#description' => t('Select which field you would like to geocode from. Currently we only support addresses via a text-field. This will change!'),
-    '#required' => TRUE,
-  );
-
-  return $form;
 }
