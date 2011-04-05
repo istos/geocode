@@ -15,7 +15,7 @@ $plugin = array(
   'description' => t('Geocodes via google geocoder'),
   'callback' => 'geocode_google',
   'field_types' => array('text','text_long','addressfield'),
-  'field_callback' => 'google_geocode_field',
+  'field_callback' => 'geocode_google_field',
 );
 
 /**
@@ -26,7 +26,7 @@ function geocode_google($address, $return = 'point') {
   return geoPHP::load($address,'google_geocode',$return);
 }
 
-function google_geocode_field($field, $field_item) {
+function geocode_google_field($field, $field_item) {
   if ($field['type'] == 'text' || $field['type'] == 'text_long') {
   	return geocode_google($field_item['value']);
   }
