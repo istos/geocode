@@ -14,7 +14,7 @@ $plugin = array(
   'title' => t("WKT Geocoder"),
   'description' => t('Get the geomtry of a WKT string'),
   'callback' => 'geocode_wkt',
-  'field_types' => array('text','text_long'),
+  'field_types' => array('text','text_long','geofield'),
   'field_callback' => 'geocode_wkt_field',
 );
 
@@ -27,5 +27,10 @@ function geocode_wkt($wkt) {
 }
 
 function geocode_wkt_field($field, $field_item) {
-  return geocode_wkt($field_item['value']);
+	if ($field['type'] == 'text' || $field['type'] == 'text_long') {
+		return geocode_wkt($field_item['value']);
+	}
+	if ($field['type'] == 'geofield') {
+		return geoPHP::load($field_item['wlkt'],'wkt');
+	}
 }
