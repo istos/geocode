@@ -1,27 +1,17 @@
 <?php // $Id: imagefield.inc,v 1.3 2009/03/02 18:14:07 vauxia Exp $
 
-/**
- * Implementation of hook_geocode_handler_info() on behalf of imagefield.
- */
-function image_geocode_handler_info() {
-  $handlers = array();
-  // This functionality requires PHP's exif module
-  if (function_exists('exif_read_data')) {
-    $handlers['geocode_image'] = array(
-      'title' => t('Image field'),
-      'module' => 'geocode',
-      'file' => 'imagefield.inc',
-      'file path' => drupal_get_path('module', 'geocode') .'/includes/modules',
-      'return types' => array(
-        'geo' => array('point'),
-      ),
-      'field types' => array('image'),
-    );
-  }
-  return $handlers;
+
+if (function_exists('exif_read_data')) {
+	$plugin = array(
+	  'title' => t("Image/exif"),
+	  'description' => t('Get a location from an image that was taken with a GPS enabled phone or camera'),
+	  'callback' => 'geocode_exif',
+	  'field_types' => array('file'),
+	  'field_callback' => 'geocode_exif_field',
+	);
 }
 
-class geocode_image extends geocode {
+class geocode_image {
   function geocode($file) {
     if ($file['filepath'] && $data = exif_read_data($file['filepath'])) {
       if (!isset($data['GPSLatitudeRef'])) return FALSE;

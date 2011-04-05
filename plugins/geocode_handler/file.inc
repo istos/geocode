@@ -1,4 +1,4 @@
-<?php // $Id: filefield.inc,v 1.2 2009/03/02 18:14:07 vauxia Exp $
+<?php // $Id$
 
 /**
  * Implementation of hook_geocode_handler_info() on behalf of filefield.
@@ -18,7 +18,7 @@ function file_geocode_handler_info() {
   );
 }
 
-class geocode_file extends geocode {
+class geocode_file {
 
   /**
    * Geocode from GPX files. (and hopefully additional formats, e.g. KML, ...)

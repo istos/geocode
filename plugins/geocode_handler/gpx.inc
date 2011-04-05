@@ -1,5 +1,6 @@
 <?php // $Id: gpx.inc,v 1.1 2009/03/02 18:14:07 vauxia Exp $
 
+
 /**
  * @file
  *
@@ -8,23 +9,55 @@
  *
  */
 
-function gpx_trackpoints($gpx) {
-  return gpx_points($gpx->getElementsByTagName('trkpt'), true);
+/**
+ * Plugins are described by creating a $plugin array which will be used
+ * by the system that includes this file.
+ */
+$plugin = array(
+  'title' => t("GPX Geocoder"),
+  'description' => t('Get the geomtry of a GPX string or file'),
+  'callback' => 'geocode_gpx',
+  'field_types' => array('text','text_long','file'),
+  'field_callback' => 'geocode_gpx_field',
+);
+
+/**
+ * Process WKT
+ */
+function geocode_gpx($gpx_string) {
+  $gpx = New DOMDocument();
+  $gpx->loadXML($gpx_string);
+  $points = gpx_trackpoints($gpx);
+  dpm($points);
 }
 
-function gpx_speed($gpx) {
-  $trackpoints = gpx_points($gpx->getElementsByTagName('trkpt'), true);
+function geocode_wkt_field($field, $field_item) {
+	if ($field['type'] == 'text' || $field['type'] == 'text_long') {
+		return geocode_gpx($field_item['value']);
+	}
+	if ($field['type'] == 'file') {
+		dpm($field);
+		dpm($field_item);
+	}
 }
 
-function gpx_elevation($gpx) {
-  return gpx_minmax($gpx->getElementsByTagName('ele'), true, 'ele');
+function geocode_gpx_trackpoints($gpx) {
+  return geocode_gpx_points($gpx->getElementsByTagName('trkpt'), true);
 }
 
-function gpx_timestamps($gpx) {
-  return gpx_minmax($gpx->getElementsByTagName('time'), true, 'time');
+function geocode_gpx_speed($gpx) {
+  $trackpoints = geocode_gpx_points($gpx->getElementsByTagName('trkpt'), true);
 }
 
-function gpx_points($items, $return_values = false) {
+function geocode_gpx_elevation($gpx) {
+  return geocode_gpx_minmax($gpx->getElementsByTagName('ele'), true, 'ele');
+}
+
+function geocode_gpx_timestamps($gpx) {
+  return geocode_gpx_minmax($gpx->getElementsByTagName('time'), true, 'time');
+}
+
+function geocode_gpx_points($items, $return_values = false) {
   $points = array();
 
   for ($i = 0; $i < $items->length; $i++) {
@@ -46,7 +79,7 @@ function gpx_points($items, $return_values = false) {
 
       for ($j = 0; $j < $children->length; $j++) {
         $type = $children->item($j)->nodeName;
-        $p[$type] = gpx_callbacks($children->item($j), $children, $j);
+        $p[$type] = geocode_gpx_callbacks($children->item($j), $children, $j);
       }
 
       // Calculate some extra values
@@ -65,7 +98,7 @@ function gpx_points($items, $return_values = false) {
           }
 
           // distance
-          $distance = gpx_distance($prev['lat'], $prev['lon'], $p['lat'], $p['lon']);
+          $distance = geocode_gpx_distance($prev['lat'], $prev['lon'], $p['lat'], $p['lon']);
           // Add elevation change (in feet) to distance (in miles)
           if ($p['ele']) {
             $distance += abs($p['climb']) * 0.000189393939;
@@ -100,11 +133,11 @@ function gpx_points($items, $return_values = false) {
   return $points;
 }
 
-function gpx_minmax($items, $return_values = false, $type = null) {
+function geocode_gpx_minmax($items, $return_values = false, $type = null) {
   $values = array();
 
   for ($i = 0; $i < $items->length; $i++) {
-    $x = gpx_callbacks($items->item($i)->nodeValue, $items, $i);
+    $x = geocode_gpx_callbacks($items->item($i)->nodeValue, $items, $i);
     if (!isset($values['min']) || ($x < $values['min'])) $values['min'] = $x;
     if (!isset($values['max']) || ($x > $values['max'])) $values['max'] = $x;
     if ($return_values) $values['data'][] = $x;
@@ -113,7 +146,7 @@ function gpx_minmax($items, $return_values = false, $type = null) {
   return $values;
 }
 
-function gpx_distance($lat1, $lon1, $lat2, $lon2) {
+function geocode_gpx_distance($lat1, $lon1, $lat2, $lon2) {
   $r = 3958.75; // Earth's radius, in miles
   $d_lat = deg2rad($lat2 - $lat1);
   $d_lon = deg2rad($lon2 - $lon1);
@@ -125,7 +158,7 @@ function gpx_distance($lat1, $lon1, $lat2, $lon2) {
   return $r * $c;
 }
 
-function gpx_callbacks($element, $items, $i, $type=null) {
+function geocode_gpx_callbacks($element, $items, $i, $type=null) {
   if (!$type) $type = $element->nodeName;
 
   switch ($type) {
