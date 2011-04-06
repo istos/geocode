@@ -159,7 +159,7 @@ function geocode_field_widget_settings_form($this_field, $instance) {
     '#prefix' => '<div id="geocode-handler-div">', 
     '#suffix' => '</div>', 
     '#default_value' => isset($settings['geocode_handler']) ? $settings['geocode_handler']: '',
-    '#options' => $available_handers,
+    '#options' => $available_handlers,
     '#description' => t('Select which type of geocoding handler you would like to use'),
     '#required' => TRUE,
   );
