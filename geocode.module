@@ -117,28 +117,32 @@ function geocode_field_widget_info() {
 /**
  * Implements field_widget_settings_form().
  */
-function geocode_field_widget_settings_form($field, $instance) {
-  $settings = $instance['settings'];
+function geocode_field_widget_settings_form($this_field, $instance) {
+  $settings = $instance['widget']['settings'];
   
   $entity_fields = field_info_instances($instance['entity_type'], $instance['bundle']);
   $all_fields = field_info_fields();
   $supported_field_types = geocode_supported_field_types();
   $processors = geocode_handler_info();
+  $handlers_by_type = array();
+  $field_types = array();
   $valid_fields = array();
   $available_handlers = array();
   
   // Get a list of all valid fields that we both support and are part of this entity
   foreach ($all_fields as $field) {
     if (array_key_exists($field['field_name'], $entity_fields)) {
-      if (in_array($field['type'], array_keys($supported_field_types))) {
+      if (in_array($field['type'], array_keys($supported_field_types)) && ($field['field_name'] != $this_field['field_name'])) {
         $valid_fields[$field['field_name']] = $entity_fields[$field['field_name']]['label'];
         foreach ($supported_field_types[$field['type']] as $handler) {
           $available_handers[$handler] = $processors[$handler]['title'];
+          $handlers_by_type[$field['type']][] = $handler;
+          $field_types[$field['field_name']] = $field['type'];
         }
       }
     }
   }
-  
+    
   $form['geocode_field'] = array(
     '#type' => 'select',
     '#title' => t('Geocode from field'),
@@ -146,18 +150,28 @@ function geocode_field_widget_settings_form($field, $instance) {
     '#options' => $valid_fields,
     '#description' => t('Select which field you would like to geocode from.'),
     '#required' => TRUE,
+    '#attributes' => array('onchange' => 'geocode_admin_handler_filter();'),
   );
 
   $form['geocode_handler'] = array(
     '#type' => 'select',
     '#title' => t('Geocoder'),
+    '#prefix' => '<div id="geocode-handler-div">', 
+    '#suffix' => '</div>', 
     '#default_value' => isset($settings['geocode_handler']) ? $settings['geocode_handler']: '',
     '#options' => $available_handers,
     '#description' => t('Select which type of geocoding handler you would like to use'),
     '#required' => TRUE,
   );
+  
+  drupal_add_js(array('geocode_widget_settings' => array('handlers' => $handlers_by_type, 'types' => $field_types)),'setting');
+  drupal_add_js(drupal_get_path('module','geocode').'/geocode.admin.js','file');
 
   return $form;
+}
+
+function geocode_field_widget_settings_form_callback($form, $form_state) {
+  return $form['geocode_handler'];
 }
 
 /**
@@ -193,27 +207,20 @@ function geocode_widget_validate($element, &$form_state) {
   // Walk the form_state values, applying all instances of geocode source and target operations
   foreach ($form_state['values'] as &$field) {
     if (is_array($field)) {
-      $lang = isset($field[$form_state['values']['language']]) ? $form_state['values']['language'] : 'und';
+      $lang = isset($form_state['values']['language']) ? $form_state['values']['language'] : 'und';
       if ((!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target']) && !empty($field[$lang][0]['geocode_handler']))) {
         // We found a source/target/handler set, let's do this.
         $source = $field[$lang][0]['geocode_source'];
         $handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
         $field_object = field_info_field($field[$lang][0]['geocode_source']);
         $field[$lang] = array();
-        foreach ($form_state['values'][$source][$lang] as $delta => $item) {
-        	$geometry = call_user_func($handler['field_callback'],$field_object, $item);
-          if ($geometry) {
-            $field[$lang][$delta] = array(
-              'wkt' => $geometry->out('wkt'),
-              'geo_type' => "point",
-              'lat' => $geometry->getY(),
-              'lon' => $geometry->getX(),
-              'top' => $geometry->getY(),
-              'bottom' => $geometry->getY(),
-              'left' => $geometry->getX(),
-              'right' => $geometry->getX(),
-            );
-          }
+        if (isset($form_state['values'][$source][$lang])) {
+	        foreach ($form_state['values'][$source][$lang] as $delta => $item) {
+	        	$geometry = call_user_func($handler['field_callback'],$field_object, $item);
+	          if ($geometry) {
+	            $field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
+	          }
+	        }
         }
       }
     }
