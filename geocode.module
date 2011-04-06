@@ -135,7 +135,7 @@ function geocode_field_widget_settings_form($this_field, $instance) {
       if (in_array($field['type'], array_keys($supported_field_types)) && ($field['field_name'] != $this_field['field_name'])) {
         $valid_fields[$field['field_name']] = $entity_fields[$field['field_name']]['label'];
         foreach ($supported_field_types[$field['type']] as $handler) {
-          $available_handers[$handler] = $processors[$handler]['title'];
+          $available_handlers[$handler] = $processors[$handler]['title'];
           $handlers_by_type[$field['type']][] = $handler;
           $field_types[$field['field_name']] = $field['type'];
         }
