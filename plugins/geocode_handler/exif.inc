@@ -6,42 +6,36 @@ if (function_exists('exif_read_data')) {
 	  'title' => t("Image/exif"),
 	  'description' => t('Get a location from an image that was taken with a GPS enabled phone or camera'),
 	  'callback' => 'geocode_exif',
-	  'field_types' => array('file'),
+	  'field_types' => array('file','image'),
 	  'field_callback' => 'geocode_exif_field',
 	);
 }
 
-class geocode_image {
-  function geocode($file) {
-    if ($file['filepath'] && $data = exif_read_data($file['filepath'])) {
-      if (!isset($data['GPSLatitudeRef'])) return FALSE;
-      $this->set_result($data);
-      return TRUE;
-    }
-    return FALSE;
-  }
-
-  function set_result($data) {
-    
-    $this->result = $data;
-    $this->point = array(
-      'lat' => $this->from_exif($data['GPSLatitudeRef'], $data['GPSLatitude']),
-      'lon' => $this->from_exif($data['GPSLongitudeRef'], $data['GPSLongitude']),
-    );
-    if (isset($data['GPSAltitude'])) {
-      list($alt, $pct) = explode('/', $item);
-      if ($pct) $alt = $alt / $pct;
-      $this->point['ele'] = $alt;
-    }
-  }
-
-  function from_exif($dir, $data) {
-    foreach ($data as $k => $item) {
-      list($deg, $pct) = explode('/', $item);
-      if ($pct) $data[$k] = $deg / $pct;
-    }
-    $point = (float) $data[0] + ($data[1] / 60) + ($data[2] / 3600);
-    if (in_array($dir, array('S', 'W'))) $point = $point * -1;
+function geocode_exif($filepath) {
+	geocode_load_geophp();
+  if ($data = exif_read_data($filepath)) {
+    if (!isset($data['GPSLatitudeRef'])) return FALSE;
+    $lat = geocode_exif_from($data['GPSLatitudeRef'], $data['GPSLatitude']);
+    $lon = geocode_exif_from($data['GPSLongitudeRef'], $data['GPSLongitude']);
+    $point = new Point($lon, $lat);
     return $point;
   }
+  else return FALSE;
+}
+
+function geocode_exif_field($field, $field_item) {
+	if ($field['type'] == 'file' || $field['type'] == 'image') {
+	  $file = file_load($field_item['fid']);
+	  return geocode_exif($file->uri);
+  }
+}
+
+function geocode_exif_from($dir, $data) {
+  foreach ($data as $k => $item) {
+    list($deg, $pct) = explode('/', $item);
+    if ($pct) $data[$k] = $deg / $pct;
+  }
+  $point = (float) $data[0] + ($data[1] / 60) + ($data[2] / 3600);
+  if (in_array($dir, array('S', 'W'))) $point = $point * -1;
+  return $point;
 }

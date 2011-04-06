@@ -14,7 +14,7 @@
  * by the system that includes this file.
  */
 $plugin = array(
-  'title' => t("GPX Geocoder"),
+  'title' => t("GPX (Does Not Work)"),
   'description' => t('Get the geomtry of a GPX string or file'),
   'callback' => 'geocode_gpx',
   'field_types' => array('text','text_long','file'),
@@ -22,23 +22,23 @@ $plugin = array(
 );
 
 /**
- * Process WKT
+ * Process GPX
  */
 function geocode_gpx($gpx_string) {
   $gpx = New DOMDocument();
   $gpx->loadXML($gpx_string);
-  $points = gpx_trackpoints($gpx);
-  dpm($points);
+  $points = geocode_gpx_trackpoints($gpx);
 }
 
-function geocode_wkt_field($field, $field_item) {
+function geocode_gpx_field($field, $field_item) {
 	if ($field['type'] == 'text' || $field['type'] == 'text_long') {
 		return geocode_gpx($field_item['value']);
 	}
-	if ($field['type'] == 'file') {
-		dpm($field);
-		dpm($field_item);
-	}
+  if ($field['type'] == 'file') {
+  	$file = file_load($field_item['fid']);
+  	$gpx = file_get_contents($file->uri);
+  	return geocode_gpx($gpx);
+  }
 }
 
 function geocode_gpx_trackpoints($gpx) {

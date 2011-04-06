@@ -11,7 +11,7 @@
  * by the system that includes this file.
  */
 $plugin = array(
-  'title' => t("GeoJSON"),
+  'title' => t("GeoJSON (Does Not Work)"),
   'description' => t('Get the geometry of a GeoJSON string, file, or URL'),
   'callback' => 'geocode_json',
   'field_types' => array('text','text_long','file','link'),
@@ -23,15 +23,16 @@ $plugin = array(
  */
 function geocode_json($json_string) {
   geocode_load_geophp();
-  return geoPHP::load($json,'json');
+  return geoPHP::load($json_string,'json');
 }
 
 function geocode_json_field($field, $field_item) {
   if ($field['type'] == 'text' || $field['type'] == 'text_long') {
   	return geocode_json($field_item['value']);
   }
-  else {
-  	dpm($field);
-  	dpm($field_item);
+  if ($field['type'] == 'file') {
+  	$file = file_load($field_item['fid']);
+  	$json = file_get_contents($file->uri);
+  	return geocode_json($json);
   }
 }
