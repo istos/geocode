@@ -216,7 +216,14 @@ function geocode_widget_validate($element, &$form_state) {
         $field[$lang] = array();
         if (isset($form_state['values'][$source][$lang])) {
 	        foreach ($form_state['values'][$source][$lang] as $delta => $item) {
-	        	$geometry = call_user_func($handler['field_callback'],$field_object, $item);
+	        	try {
+	        	  $geometry = call_user_func($handler['field_callback'],$field_object, $item);
+	        	}
+	        	catch(Exception $e) {
+	        		drupal_set_message($e->getMessage(),'error');
+	        		return;
+	        	}
+	        	
 	          if ($geometry) {
 	            $field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
 	          }
