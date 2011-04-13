@@ -11,7 +11,7 @@
  * by the system that includes this file.
  */
 $plugin = array(
-  'title' => t("GeoJSON (Does Not Work)"),
+  'title' => t("GeoJSON"),
   'description' => t('Get the geometry of a GeoJSON string, file, or URL'),
   'callback' => 'geocode_json',
   'field_types' => array('text','text_long','file','link'),

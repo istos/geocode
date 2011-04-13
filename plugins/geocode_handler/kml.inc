@@ -11,7 +11,7 @@
  * by the system that includes this file.
  */
 $plugin = array(
-  'title' => t("KML (Buggy as Hell)"),
+  'title' => t("KML"),
   'description' => t('Get the geometry out of a KML string, file, or URL'),
   'callback' => 'geocode_kml',
   'field_types' => array('text','text_long','file'),
