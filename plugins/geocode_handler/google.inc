@@ -14,7 +14,7 @@ $plugin = array(
   'title' => t("Google Geocoder"),
   'description' => t('Geocodes via google geocoder'),
   'callback' => 'geocode_google',
-  'field_types' => array('text','text_long','addressfield'),
+  'field_types' => array('text','text_long','addressfield','text_with_summary','computed'),
   'field_callback' => 'geocode_google_field',
 );
 
@@ -27,7 +27,7 @@ function geocode_google($address, $return = 'point') {
 }
 
 function geocode_google_field($field, $field_item) {
-  if ($field['type'] == 'text' || $field['type'] == 'text_long') {
+  if ($field['type'] == 'text' || $field['type'] == 'text_long' || $field['type'] == 'text_with_summary' || $field['type'] == 'computed') {
   	return geocode_google($field_item['value']);
   }
   if ($field['type'] == 'addressfield') {
