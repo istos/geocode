@@ -14,7 +14,7 @@ $plugin = array(
   'title' => t("KML"),
   'description' => t('Get the geometry out of a KML string, file, or URL'),
   'callback' => 'geocode_kml',
-  'field_types' => array('text','text_long','file'),
+  'field_types' => array('text','text_long','file','computed'),
   'field_callback' => 'geocode_kml_field',
 );
 
@@ -27,7 +27,7 @@ function geocode_kml($kml_string) {
 }
 
 function geocode_kml_field($field, $field_item) {
-  if ($field['type'] == 'text' || $field['type'] == 'text_long') {
+  if ($field['type'] == 'text' || $field['type'] == 'text_long' || $field['type'] == 'computed') {
   	return geocode_kml($field_item['value']);
   }
   if ($field['type'] == 'file') {

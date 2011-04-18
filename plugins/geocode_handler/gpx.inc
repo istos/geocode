@@ -17,7 +17,7 @@ $plugin = array(
   'title' => t("GPX"),
   'description' => t('Get the geomtry of a GPX string or file'),
   'callback' => 'geocode_gpx',
-  'field_types' => array('text','text_long','file'),
+  'field_types' => array('text','text_long','file','computed'),
   'field_callback' => 'geocode_gpx_field',
 );
 
@@ -30,13 +30,13 @@ function geocode_gpx($gpx_string) {
 }
 
 function geocode_gpx_field($field, $field_item) {
-  if ($field['type'] == 'text' || $field['type'] == 'text_long') {
+  if ($field['type'] == 'text' || $field['type'] == 'text_long' || $field['type'] == 'computed') {
   	return geocode_gpx($field_item['value']);
   }
   if ($field['type'] == 'file') {
   	$file = file_load($field_item['fid']);
-  	$kml = file_get_contents($file->uri);
-  	return geocode_gpx($kml);
+  	$gpx = file_get_contents($file->uri);
+  	return geocode_gpx($gpx);
   }
 }
 
