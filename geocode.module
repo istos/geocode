@@ -177,8 +177,7 @@ function geocode_field_widget_settings_form_callback($form, $form_state) {
 /**
  * Implements hook_field_widget_form().
  */
-function geocode_field_widget_form(&$form, &$form_state, $field, $instance,
-  $langcode, $items, $delta, $base) {
+function geocode_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $base) {
   $element = $base;
   
   $element['wkt'] = array(
@@ -201,35 +200,68 @@ function geocode_field_widget_form(&$form, &$form_state, $field, $instance,
   return $element;
 }
 
+
 function geocode_widget_validate($element, &$form_state) {
   // To validate, we simply run through the form fields, looking for items with geocode_source and geocode_target properties
-  
+	
   // Walk the form_state values, applying all instances of geocode source and target operations
   foreach ($form_state['values'] as &$field) {
-    if (is_array($field)) {
-      $lang = isset($form_state['values']['language']) ? $form_state['values']['language'] : 'und';
-      if ((!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target']) && !empty($field[$lang][0]['geocode_handler']))) {
-        // We found a source/target/handler set, let's do this.
-        $source = $field[$lang][0]['geocode_source'];
-        $handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
-        $field_object = field_info_field($field[$lang][0]['geocode_source']);
-        $field[$lang] = array();
-        if (isset($form_state['values'][$source][$lang])) {
-	        foreach ($form_state['values'][$source][$lang] as $delta => $item) {
-	        	try {
-	        	  $geometry = call_user_func($handler['field_callback'],$field_object, $item);
-	        	}
-	        	catch(Exception $e) {
-	        		drupal_set_message($e->getMessage(),'error');
-	        		return;
-	        	}
-	        	
-	          if ($geometry) {
-	            $field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
-	          }
-	        }
-        }
-      }
-    }
+		geocode_widget_validate_walkthrough(&$field, $form_state);
   }
+	
+	if (isset($form_state['field']['#parents'])) {
+		//Walk through the fields that are under parents and match up and sources and targets there
+		foreach ($form_state['field']['#parents'] as $parent => $parent_data) {
+			foreach ($form_state['values'][$parent] as &$field) {
+				geocode_widget_validate_walkthrough(&$field, $form_state, $parent);
+			}
+		}
+	}
+}
+
+
+function geocode_widget_validate_walkthrough(&$field, $form_state, $parent = NULL) {
+  if (is_array($field)) {
+    $lang = isset($form_state['values']['language']) ? $form_state['values']['language'] : 'und';
+    if ((!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target']) && !empty($field[$lang][0]['geocode_handler']))) {
+			// We found a source/target/handler set, let's do this.
+			$source = $field[$lang][0]['geocode_source'];
+			$handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
+			$field_object = field_info_field($field[$lang][0]['geocode_source']);
+			$field[$lang] = array();
+			if (isset($parent)) {
+				if (isset($form_state['values'][$parent][$source][$lang])) {
+					foreach ($form_state['values'][$parent][$source][$lang] as $delta => $item) {
+						try {
+							$geometry = call_user_func($handler['field_callback'],$field_object, $item);
+						}
+						catch(Exception $e) {
+							drupal_set_message($e->getMessage(),'error');
+							return;
+						}
+						
+						if ($geometry) {
+							$field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
+						} 
+					}
+				}				
+			} else {
+				if (isset($form_state['values'][$source][$lang])) {
+					foreach ($form_state['values'][$source][$lang] as $delta => $item) {
+						try {
+							$geometry = call_user_func($handler['field_callback'],$field_object, $item);
+						}
+						catch(Exception $e) {
+							drupal_set_message($e->getMessage(),'error');
+							return;
+						}
+						
+						if ($geometry) {
+							$field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
+						} 
+					}
+				}
+			}
+		}
+	}
 }
