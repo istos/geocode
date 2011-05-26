@@ -7,22 +7,22 @@
  *    geocode('google','New York City','polygon');
  */
 function geocode() {
-	ctools_include('plugins');
-	
+  ctools_include('plugins');
+
   $args = func_get_args();
   $processor_name = array_shift($args);
   $processor = ctools_get_plugins('geocode', 'geocode_handler', $processor_name);
   $geometry = call_user_func_array($processor['callback'],$args);
-  
+
   return $geometry;
 }
 
 /**
- * Return a list of all handlers that might geocode something for you. 
+ * Return a list of all handlers that might geocode something for you.
  */
 function geocode_handler_info($field_type = NULL) {
-	ctools_include('plugins');
-	
+  ctools_include('plugins');
+
   static $handlers;
   if (!$handlers) {
     $handlers = ctools_get_plugins('geocode', 'geocode_handler');
@@ -40,29 +40,29 @@ function geocode_handler_info($field_type = NULL) {
 }
 
 function geocode_get_handler($handler_name) {
-	$handlers = geocode_handler_info();
-	return $handlers[$handler_name];
+  $handlers = geocode_handler_info();
+  return $handlers[$handler_name];
 }
 
 function geocode_supported_field_types() {
-	$supported = array();
-	
-	$processors = geocode_handler_info();
+  $supported = array();
 
-	foreach ($processors as $processor) {
-		if (isset($processor['field_types'])) {
-			foreach ($processor['field_types'] as $field_type) {
-				$supported[$field_type][] = $processor['name'];
-			}
-	  }
-	}
-	
+  $processors = geocode_handler_info();
+
+  foreach ($processors as $processor) {
+    if (isset($processor['field_types'])) {
+      foreach ($processor['field_types'] as $field_type) {
+        $supported[$field_type][] = $processor['name'];
+      }
+    }
+  }
+
 	return $supported;
 }
 
 function geocode_load_geophp() {
   static $static_cache = FALSE;
-  
+
   if (!$static_cache) {
     $path = libraries_get_path('geoPHP');
     $file = $path.'/geoPHP.inc';
@@ -72,7 +72,7 @@ function geocode_load_geophp() {
       }
     }
   }
-  
+
   return $static_cache;
 }
 
@@ -113,13 +113,12 @@ function geocode_field_widget_info() {
   );
 }
 
-
 /**
  * Implements field_widget_settings_form().
  */
 function geocode_field_widget_settings_form($this_field, $instance) {
   $settings = $instance['widget']['settings'];
-  
+
   $entity_fields = field_info_instances($instance['entity_type'], $instance['bundle']);
   $all_fields = field_info_fields();
   $supported_field_types = geocode_supported_field_types();
@@ -128,7 +127,29 @@ function geocode_field_widget_settings_form($this_field, $instance) {
   $field_types = array();
   $valid_fields = array();
   $available_handlers = array();
-  
+
+  // Add in the title/name
+  switch ($instance['entity_type']) {
+    case 'node':
+      $all_fields['title'] = array(
+        'field_name' => 'title',
+        'type' => 'text',
+      );
+
+      $entity_fields['title']['label'] = t('Title');
+      break;
+
+    case 'taxonomy_term':
+      $all_fields['name'] = array(
+        'field_name' => 'name',
+        'type' => 'text',
+      );
+
+      $entity_fields['name']['label'] = t('Name');
+      break;
+  }
+
+
   // Get a list of all valid fields that we both support and are part of this entity
   foreach ($all_fields as $field) {
     if (array_key_exists($field['field_name'], $entity_fields)) {
@@ -142,7 +163,7 @@ function geocode_field_widget_settings_form($this_field, $instance) {
       }
     }
   }
-    
+
   $form['geocode_field'] = array(
     '#type' => 'select',
     '#title' => t('Geocode from field'),
@@ -156,14 +177,14 @@ function geocode_field_widget_settings_form($this_field, $instance) {
   $form['geocode_handler'] = array(
     '#type' => 'select',
     '#title' => t('Geocoder'),
-    '#prefix' => '<div id="geocode-handler-div">', 
-    '#suffix' => '</div>', 
+    '#prefix' => '<div id="geocode-handler-div">',
+    '#suffix' => '</div>',
     '#default_value' => isset($settings['geocode_handler']) ? $settings['geocode_handler']: '',
     '#options' => $available_handlers,
     '#description' => t('Select which type of geocoding handler you would like to use'),
     '#required' => TRUE,
   );
-  
+
   drupal_add_js(array('geocode_widget_settings' => array('handlers' => $handlers_by_type, 'types' => $field_types)),'setting');
   drupal_add_js(drupal_get_path('module','geocode').'/geocode.admin.js','file');
 
@@ -179,7 +200,7 @@ function geocode_field_widget_settings_form_callback($form, $form_state) {
  */
 function geocode_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $base) {
   $element = $base;
-  
+
   $element['wkt'] = array(
    '#type' => 'hidden',
    '#element_validate' => array('geocode_widget_validate'),
@@ -203,65 +224,85 @@ function geocode_field_widget_form(&$form, &$form_state, $field, $instance, $lan
 
 function geocode_widget_validate($element, &$form_state) {
   // To validate, we simply run through the form fields, looking for items with geocode_source and geocode_target properties
-	
+
   // Walk the form_state values, applying all instances of geocode source and target operations
   foreach ($form_state['values'] as &$field) {
-		geocode_widget_validate_walkthrough(&$field, $form_state);
+    geocode_widget_validate_walkthrough(&$field, $form_state);
   }
-	
-	if (isset($form_state['field']['#parents'])) {
-		//Walk through the fields that are under parents and match up and sources and targets there
-		foreach ($form_state['field']['#parents'] as $parent => $parent_data) {
-			foreach ($form_state['values'][$parent] as &$field) {
-				geocode_widget_validate_walkthrough(&$field, $form_state, $parent);
-			}
-		}
-	}
+
+  if (isset($form_state['field']['#parents'])) {
+    //Walk through the fields that are under parents and match up and sources and targets there
+    foreach ($form_state['field']['#parents'] as $parent => $parent_data) {
+      foreach ($form_state['values'][$parent] as &$field) {
+        geocode_widget_validate_walkthrough(&$field, $form_state, $parent);
+      }
+    }
+  }
 }
 
 
 function geocode_widget_validate_walkthrough(&$field, $form_state, $parent = NULL) {
   if (is_array($field)) {
-    $lang = isset($form_state['values']['language']) ? $form_state['values']['language'] : 'und';
+    $lang = isset($form_state['values']['language']) ? $form_state['values']['language'] : LANGUAGE_NONE;
     if ((!empty($field[$lang][0]['geocode_source']) && !empty($field[$lang][0]['geocode_target']) && !empty($field[$lang][0]['geocode_handler']))) {
-			// We found a source/target/handler set, let's do this.
-			$source = $field[$lang][0]['geocode_source'];
-			$handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
-			$field_object = field_info_field($field[$lang][0]['geocode_source']);
-			$field[$lang] = array();
-			if (isset($parent)) {
-				if (isset($form_state['values'][$parent][$source][$lang])) {
-					foreach ($form_state['values'][$parent][$source][$lang] as $delta => $item) {
-						try {
-							$geometry = call_user_func($handler['field_callback'],$field_object, $item);
-						}
-						catch(Exception $e) {
-							drupal_set_message($e->getMessage(),'error');
-							return;
-						}
-						
-						if ($geometry) {
-							$field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
-						} 
-					}
-				}				
-			} else {
-				if (isset($form_state['values'][$source][$lang])) {
-					foreach ($form_state['values'][$source][$lang] as $delta => $item) {
-						try {
-							$geometry = call_user_func($handler['field_callback'],$field_object, $item);
-						}
-						catch(Exception $e) {
-							drupal_set_message($e->getMessage(),'error');
-							return;
-						}
-						
-						if ($geometry) {
-							$field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
-						} 
-					}
-				}
-			}
-		}
-	}
+      // We found a source/target/handler set, let's do this.
+      $source = $field[$lang][0]['geocode_source'];
+      $handler = geocode_get_handler($field[$lang][0]['geocode_handler']);
+      $field[$lang] = array();
+      // If the sources is 'title' then pull from the title
+      if ($source == 'title' || 'name') {
+        if (isset($form_state['values'][$source])) {
+          $field_object = array('type' => 'text');
+          $item = array('value' => $form_state['values'][$source]);
+          try {
+            $geometry = call_user_func($handler['field_callback'],$field_object, $item);
+          }
+          catch(Exception $e) {
+            drupal_set_message($e->getMessage(),'error');
+            return;
+          }
+
+          if ($geometry) {
+            $field[$lang][0] = geofield_get_values_from_geometry($geometry);
+          }
+        }
+      }
+      else {
+        $field_object = field_info_field($field[$lang][0]['geocode_source']);
+        if (isset($parent)) {
+          if (isset($form_state['values'][$parent][$source][$lang])) {
+            foreach ($form_state['values'][$parent][$source][$lang] as $delta => $item) {
+              try {
+                $geometry = call_user_func($handler['field_callback'],$field_object, $item);
+              }
+              catch(Exception $e) {
+                drupal_set_message($e->getMessage(),'error');
+                return;
+              }
+
+              if ($geometry) {
+                $field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
+              }
+            }
+          }
+        } else {
+          if (isset($form_state['values'][$source][$lang])) {
+            foreach ($form_state['values'][$source][$lang] as $delta => $item) {
+              try {
+                $geometry = call_user_func($handler['field_callback'],$field_object, $item);
+              }
+              catch(Exception $e) {
+                drupal_set_message($e->getMessage(),'error');
+                return;
+              }
+
+              if ($geometry) {
+                $field[$lang][$delta] = geofield_get_values_from_geometry($geometry);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
