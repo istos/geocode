@@ -227,14 +227,14 @@ function geocode_widget_validate($element, &$form_state) {
 
   // Walk the form_state values, applying all instances of geocode source and target operations
   foreach ($form_state['values'] as &$field) {
-    geocode_widget_validate_walkthrough(&$field, $form_state);
+    geocode_widget_validate_walkthrough($field, $form_state);
   }
 
   if (isset($form_state['field']['#parents'])) {
     //Walk through the fields that are under parents and match up and sources and targets there
     foreach ($form_state['field']['#parents'] as $parent => $parent_data) {
       foreach ($form_state['values'][$parent] as &$field) {
-        geocode_widget_validate_walkthrough(&$field, $form_state, $parent);
+        geocode_widget_validate_walkthrough($field, $form_state, $parent);
       }
     }
   }
